@@ -2,38 +2,44 @@
 import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MapInterface from '../components/map_interface';
+import PriceComparisonScreen from '@/app/price_comparison';
+import SettingsScreen from '@/app/settings';
+
 
 export default function HomeScreen() {
-  return (
-    <SafeAreaProvider >
-        <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
-            <StatusBar barStyle="dark-content"></StatusBar>
-            {/* <Text style={styles.title}>
+
+    return (
+        <SafeAreaProvider >
+            <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+                <StatusBar barStyle="dark-content"></StatusBar>
+                {/* <Text style={styles.title}>
                 Combustível App
             </Text> */}
 
-            <View style={styles.mapContainer}>
-                <MapInterface />
-            </View>
+                <View style={styles.mapContainer}>
+                    <MapInterface />
+                    {/* <PriceComparisonScreen /> */}
+                    {/* <SettingsScreen /> */}
+                </View>
 
 
-        </SafeAreaView>
-    </SafeAreaProvider>
-  );
+            </SafeAreaView>
+        </SafeAreaProvider>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    padding: 16,
-  },
-  mapContainer: {
-    flex: 1,
-  },
+    container: {
+        flex: 1
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        padding: 16,
+    },
+    mapContainer: {
+        flex: 1,
+    },
 });
 
 
