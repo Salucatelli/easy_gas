@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
+import { saveStation, Station } from '../services/stationStorage';
 import {
     Alert,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -15,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import LocationPickerModal from '../components/locationPickerModal';
 
 export default function AddStationScreen() {
     const router = useRouter();
@@ -26,8 +29,9 @@ export default function AddStationScreen() {
     const [gasoline, setGasoline] = useState('');
     const [ethanol, setEthanol] = useState('');
     const [diesel, setDiesel] = useState('');
+    const [locationPickerVisible, setLocationPickerVisible] = useState(false);
 
-    function handleSubmit() {
+    async function handleSubmit() {
         if (!name.trim() || !address.trim()) {
             Alert.alert(
                 'Campos obrigatórios',
@@ -36,30 +40,63 @@ export default function AddStationScreen() {
             return;
         }
 
-        const station = {
+        const parseCoordinate = (value: string): number | null => {
+            if (!value.trim()) return null;
+
+            const parsed = Number(value.replace(',', '.'));
+
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const lat = parseCoordinate(latitude);
+        const lng = parseCoordinate(longitude);
+
+        if (
+            (latitude.trim() && lat === null) ||
+            (longitude.trim() && lng === null)
+        ) {
+            Alert.alert(
+                'Coordenadas inválidas',
+                'Verifique os valores de latitude e longitude.'
+            );
+            return;
+        }
+
+        const station: Station = {
+            id: Date.now().toString(),
             name: name.trim(),
             address: address.trim(),
-            latitude: latitude.trim(),
-            longitude: longitude.trim(),
+            latitude: lat,
+            longitude: lng,
             prices: {
                 gasoline: gasoline.trim(),
                 ethanol: ethanol.trim(),
                 diesel: diesel.trim(),
             },
+            createdAt: new Date().toISOString(),
         };
 
-        console.log('Novo posto:', station);
+        try {
+            await saveStation(station);
 
-        Alert.alert(
-            'Posto preenchido!',
-            'Os dados foram validados na tela. O salvamento no banco ainda precisa ser implementado.',
-            [
-                {
-                    text: 'OK',
-                    onPress: () => router.back(),
-                },
-            ]
-        );
+            Alert.alert(
+                'Sucesso!',
+                'Posto cadastrado e salvo no dispositivo.',
+                [
+                    {
+                        text: 'OK',
+                        onPress: () => router.back(),
+                    },
+                ]
+            );
+        } catch (error) {
+            console.error('Erro ao salvar posto:', error);
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível salvar o posto no dispositivo.'
+            );
+        }
     }
 
     function renderField(
@@ -214,6 +251,21 @@ export default function AddStationScreen() {
                             </Text>
                         </View>
 
+                        <TouchableOpacity
+                            style={styles.selectLocationButton}
+                            onPress={() => setLocationPickerVisible(true)}
+                        >
+                            <Ionicons
+                                name="map-outline"
+                                size={20}
+                                color="#003399"
+                            />
+
+                            <Text style={styles.selectLocationButtonText}>
+                                Selecionar no mapa
+                            </Text>
+                        </TouchableOpacity>
+
                         <Text style={styles.sectionHeader}>
                             PREÇOS DOS COMBUSTÍVEIS
                         </Text>
@@ -290,6 +342,23 @@ export default function AddStationScreen() {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+
+            <LocationPickerModal
+                visible={locationPickerVisible}
+                initialLatitude={
+                    latitude.trim() ? Number(latitude.replace(',', '.')) : null
+                }
+                initialLongitude={
+                    longitude.trim() ? Number(longitude.replace(',', '.')) : null
+                }
+                onClose={() => setLocationPickerVisible(false)}
+                onConfirm={(lat, lng) => {
+                    setLatitude(lat.toString());
+                    setLongitude(lng.toString());
+
+                    setLocationPickerVisible(false);
+                }}
+            />
         </LinearGradient>
     );
 }
@@ -449,5 +518,22 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 15,
         fontWeight: '600',
+    },
+    selectLocationButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#00E676',
+        borderRadius: 12,
+        padding: 13,
+        marginHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 12,
+        gap: 8,
+    },
+    selectLocationButtonText: {
+        color: '#003399',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
 });

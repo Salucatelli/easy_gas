@@ -5,13 +5,20 @@ import {
     Pressable,
     StyleSheet,
     Alert,
+    Modal,
+    FlatList,
+    ActivityIndicator,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
+
+import { getStations, Station } from '../services/stationStorage';
+import NearStationsModal from "./nearStationsModal"
 
 const html = `
 <!DOCTYPE html>
@@ -114,10 +121,45 @@ const html = `
 </html>
 `;
 
+function calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+): number {
+    const earthRadius = 6371;
 
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return earthRadius * c;
+}
+
+async function loadStations() {
+    const stations = await getStations();
+
+    console.log('Postos salvos:', stations);
+}
 
 
 export default function MapInterface() {
+    const [stationsModalVisible, setStationsModalVisible] = useState(false);
+    const [nearbyStations, setNearbyStations] = useState<
+        (Station & { distance: number })[]
+    >([]);
+    const [loadingStations, setLoadingStations] = useState(false);
+    const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+
+    const [stations, setStations] = useState<Station[]>([])
+
     const webViewRef = useRef<WebView>(null);
 
     const router = useRouter();
@@ -131,57 +173,254 @@ export default function MapInterface() {
     const [loading, setLoading] = useState(true);
 
     function createMapHTML(latitude: number, longitude: number) {
+        // Converte os postos para JSON válido
+        const stationsJSON = JSON.stringify(stations).replace(/</g, '\\u003c');
+
         return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
-        <style>
-          html, body, #map {
-            height: 100%;
-            margin: 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="map"></div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-          const latitude = ${latitude};
-          const longitude = ${longitude};
+            <!-- CSS do Leaflet -->
+            <link
+                rel="stylesheet"
+                href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+            />
 
-          const map = L.map('map').setView(
-            [latitude, longitude],
-            16
-          );
+            <style>
+                html, body, #map {
+                    height: 100%;
+                    width: 100%;
+                    margin: 0;
+                    padding: 0;
+                }
+                .station-marker {
+                    width: 100%;
+                    height: 100%;
+                    background: #0066FF;
+                    border: 3px solid white;
+                    box-sizing: border-box;
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
 
-          L.tileLayer(
-            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            {
-              attribution: '&copy; OpenStreetMap contributors'
-            }
-          ).addTo(map);
+                .station-marker svg {
+                    width: 55%;
+                    height: 55%;
+                    transform: rotate(45deg);
+                }
+            </style>
+        </head>
 
-          // Marcador da localização do usuário
-          L.circleMarker([latitude, longitude], {
-            radius: 9,
-            color: '#ffffff',
-            weight: 3,
-            fillColor: '#1769e0',
-            fillOpacity: 1
-          })
-          .addTo(map)
-          .bindPopup('Você está aqui');
-        </script>
-      </body>
-    </html>
-  `;
+        <body>
+            <div id="map"></div>
+
+            <!-- JavaScript do Leaflet -->
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+            <script>
+                // Verifica se o Leaflet foi carregado
+                if (typeof L === 'undefined') {
+                    document.body.innerHTML = 'Erro ao carregar o Leaflet.';
+                } else {
+
+                    const customStationIcon = L.divIcon({
+                        className: '',
+                        html:
+                            '<div class="station-marker">' +
+                                '<svg viewBox="0 0 24 24" fill="none" ' +
+                                    'stroke="white" stroke-width="2" ' +
+                                    'stroke-linecap="round" stroke-linejoin="round">' +
+                                    '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
+                                    '<path d="M2 22h14"/>' +
+                                    '<path d="M7 7h4v5H7z"/>' +
+                                    '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
+                                '</svg>' +
+                            '</div>',
+                        iconSize: [48, 48],
+                        iconAnchor: [24, 48],
+                        popupAnchor: [0, -45]
+                    });
+                    const latitude = ${latitude};
+                    const longitude = ${longitude};
+
+                    // Postos recebidos do React Native
+                    const stations = ${stationsJSON};
+
+                    // Inicializa o mapa
+                    const map = L.map('map', {
+                        zoomControl: false
+                    }).setView([latitude, longitude], 16);
+
+                    map.on('zoomend', updateMarkerSize);
+
+                    // Camada do OpenStreetMap
+                    L.tileLayer(
+                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        {
+                            maxZoom: 19,
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }
+                    ).addTo(map);
+
+                    // Marcador da localização do usuário
+                    L.circleMarker([latitude, longitude], {
+                        radius: 9,
+                        color: '#ffffff',
+                        weight: 3,
+                        fillColor: '#1769e0',
+                        fillOpacity: 1
+                    })
+                    .addTo(map)
+                    .bindPopup('Você está aqui');
+
+                    // Adiciona os postos cadastrados
+                    stations.forEach(posto => {
+
+                        if (
+                            typeof posto.latitude !== 'number' ||
+                            typeof posto.longitude !== 'number' ||
+                            !Number.isFinite(posto.latitude) ||
+                            !Number.isFinite(posto.longitude)
+                        ) {
+                            return;
+                        }
+
+                        const marker = L.marker(
+                            [posto.latitude, posto.longitude],
+                            {
+                                icon: customStationIcon,
+                                isStation: true
+                            }
+                        ).addTo(map);
+
+                        // Monta o conteúdo do popup com segurança
+                        const popup = document.createElement('div');
+
+                        const name = document.createElement('strong');
+                        name.textContent = posto.name || 'Posto sem nome';
+
+                        const address = document.createElement('p');
+                        address.textContent = posto.address || '';
+
+                        const gasoline = document.createElement('p');
+                        gasoline.textContent =
+                            'Gasolina: R$ ' + (posto.prices?.gasoline || '--');
+
+                        popup.appendChild(name);
+                        popup.appendChild(address);
+                        popup.appendChild(gasoline);
+
+                        marker.bindPopup(popup);
+                    });
+
+                    function updateMarkerSize() {
+                        const zoom = map.getZoom();
+
+                        // Zoom 15 = tamanho normal
+                        const scale = Math.max(
+                            0.4,
+                            Math.min(1.2, Math.pow(1.15, zoom - 15))
+                        );
+
+                        const size = 32 * scale;
+
+                        const newIcon = L.divIcon({
+                            className: '',
+                            html:
+                                '<div class="station-marker">' +
+                                    '<svg viewBox="0 0 24 24" fill="none" ' +
+                                        'stroke="white" stroke-width="2" ' +
+                                        'stroke-linecap="round" stroke-linejoin="round">' +
+                                        '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
+                                        '<path d="M2 22h14"/>' +
+                                        '<path d="M7 7h4v5H7z"/>' +
+                                        '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
+                                    '</svg>' +
+                                '</div>',
+                            iconSize: [size, size],
+                            iconAnchor: [size / 2, size],
+                            popupAnchor: [0, -size + 3]
+                        });
+
+                        map.eachLayer((layer) => {
+                            if (layer instanceof L.Marker && layer.options.isStation) {
+                                layer.setIcon(newIcon);
+                            }
+                        });
+                    }
+
+                    // Disponibiliza a função para atualizações de localização
+                    window.updateUserLocation = function(latitude, longitude) {
+                        const position = [latitude, longitude];
+
+                        if (window.userMarker) {
+                            map.removeLayer(window.userMarker);
+                        }
+
+                        if (window.userCircle) {
+                            map.removeLayer(window.userCircle);
+                        }
+
+                        window.userCircle = L.circle(position, {
+                            radius: 30,
+                            color: '#1769e0',
+                            fillColor: '#1769e0',
+                            fillOpacity: 0.12,
+                            weight: 1
+                        }).addTo(map);
+
+                        window.userMarker = L.circleMarker(position, {
+                            radius: 9,
+                            color: '#ffffff',
+                            weight: 3,
+                            fillColor: '#1769e0',
+                            fillOpacity: 1
+                        }).addTo(map);
+
+                        window.userMarker.bindPopup('Você está aqui');
+
+                        map.setView(position, 16);
+                    };
+
+                    updateMarkerSize();
+                    window.mapReady = true;
+                    
+
+                    console.log('Mapa carregado!');
+                    console.log('Postos recebidos:', stations.length);
+                }
+            </script>
+        </body>
+        </html>
+    `;
     }
+
+
+    useFocusEffect(
+        useCallback(() => {
+            async function loadStations() {
+                try {
+                    setLoadingStations(true);
+
+                    const savedStations = await getStations();
+
+                    setStations(savedStations);
+                } catch (error) {
+                    console.error('Erro ao carregar postos:', error);
+                } finally {
+                    setLoadingStations(false);
+                }
+            }
+
+            loadStations();
+        }, [])
+    );
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -297,6 +536,18 @@ export default function MapInterface() {
 
     const insets = useSafeAreaInsets();
 
+    function handleFindOnMap(station: Station) {
+        setSelectedStation(station);
+
+        console.log('Posto selecionado:', station);
+
+        setStationsModalVisible(false);
+
+        // Futuramente:
+        // Centralizar o mapa nas coordenadas do posto.
+        // Adicionar ou destacar o marcador no Leaflet.
+    }
+
     function handleSearch() {
         if (!search.trim()) return;
 
@@ -309,8 +560,67 @@ export default function MapInterface() {
         Alert.alert('Filtros', 'Aqui ficarão os filtros de combustível.');
     }
 
-    function handleStations() {
-        Alert.alert('Postos próximos', 'Aqui aparecerá a lista de postos.');
+    async function handleStations() {
+        try {
+            setStationsModalVisible(true);
+            setLoadingStations(true);
+
+            // Solicita permissão de localização
+            const { status } =
+                await Location.requestForegroundPermissionsAsync();
+
+            if (status !== 'granted') {
+                Alert.alert(
+                    'Localização necessária',
+                    'Permita o acesso à localização para encontrar os postos próximos.'
+                );
+
+                setStationsModalVisible(false);
+                return;
+            }
+
+            // Obtém localização atual
+            const position = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+
+            const { latitude, longitude } = position.coords;
+
+            // Recupera postos salvos
+            const stations = await getStations();
+
+            // Calcula distância e ordena os postos
+            const sortedStations = stations
+                .filter(
+                    station =>
+                        station.latitude !== null &&
+                        station.longitude !== null
+                )
+                .map(station => ({
+                    ...station,
+                    distance: calculateDistance(
+                        latitude,
+                        longitude,
+                        station.latitude!,
+                        station.longitude!
+                    ),
+                }))
+                .sort((a, b) => a.distance - b.distance);
+
+            setNearbyStations(sortedStations);
+
+        } catch (error) {
+            console.error('Erro ao buscar postos:', error);
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar os postos próximos.'
+            );
+
+            setStationsModalVisible(false);
+        } finally {
+            setLoadingStations(false);
+        }
     }
 
     async function handleLocation() {
@@ -467,6 +777,15 @@ export default function MapInterface() {
                 <Text style={styles.stationsIcon}>☰</Text>
                 <Text style={styles.stationsText}>Postos próximos</Text>
             </Pressable>
+
+
+            <NearStationsModal
+                stationsModalVisible={stationsModalVisible}
+                setStationsModalVisible={setStationsModalVisible}
+                loadingStations={loadingStations}
+                nearbyStations={nearbyStations}
+                handleFindOnMap={handleFindOnMap}
+            />
         </View>
     );
 }
