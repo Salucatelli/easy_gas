@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LocationPickerModal from '../components/locationPickerModal';
 
+import * as Location from 'expo-location';
+
 export default function AddStationScreen() {
     const router = useRouter();
 
@@ -99,6 +101,14 @@ export default function AddStationScreen() {
         }
     }
 
+    //Sets a new addres using a latitude + longitde
+    async function setNewAddress(latitude: number, longitude: number) {
+        let fullAddress: Location.LocationGeocodedAddress[] = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+        let address: string = fullAddress[0]["formattedAddress"] || "";
+        setAddress(address)
+    }
+
     function renderField(
         label: string,
         icon: React.ComponentProps<typeof Ionicons>['name'],
@@ -148,8 +158,9 @@ export default function AddStationScreen() {
         >
             <SafeAreaView style={styles.safeArea}>
                 <KeyboardAvoidingView
-                    style={styles.keyboard}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={0}
                 >
                     <ScrollView
                         contentContainerStyle={styles.scroll}
@@ -355,6 +366,8 @@ export default function AddStationScreen() {
                 onConfirm={(lat, lng) => {
                     setLatitude(lat.toString());
                     setLongitude(lng.toString());
+
+                    setNewAddress(lat, lng)
 
                     setLocationPickerVisible(false);
                 }}
