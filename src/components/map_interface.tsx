@@ -19,107 +19,7 @@ import * as Location from 'expo-location';
 
 import { getStations, Station } from '../services/stationStorage';
 import NearStationsModal from "./nearStationsModal"
-
-const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-    html, body, #map {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <script>
-    const map = L.map('map', {zoomControl: false}).setView(
-      [-22.3572, -47.3842],
-      14
-    );
-
-    window.mapReady = true;
-
-    let userMarker = null;
-    let userCircle = null;
-
-    function updateUserLocation(latitude, longitude) {
-    const position = [latitude, longitude];
-
-    // Remove o marcador anterior, se existir.
-    if (userMarker) {
-        map.removeLayer(userMarker);
-    }
-
-    if (userCircle) {
-        map.removeLayer(userCircle);
-    }
-
-    // Círculo azul ao redor da posição do usuário.
-    userCircle = L.circle(position, {
-        radius: 30,
-        color: '#1769e0',
-        fillColor: '#1769e0',
-        fillOpacity: 0.12,
-        weight: 1
-    }).addTo(map);
-
-    // Marcador personalizado para o usuário.
-    userMarker = L.circleMarker(position, {
-        radius: 9,
-        color: '#ffffff',
-        weight: 3,
-        fillColor: '#1769e0',
-        fillOpacity: 1
-    }).addTo(map);
-
-    userMarker.bindPopup('Você está aqui');
-
-    // Centraliza o mapa na posição atual.
-    map.setView(position, 16);
-    }
-
-    L.tileLayer(
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-      }
-    ).addTo(map);
-
-    const postos = [
-      {
-        nome: 'Posto Centro',
-        latitude: -22.3572,
-        longitude: -47.3842,
-        gasolina: 5.79,
-        etanol: 3.89
-      },
-      {
-        nome: 'Posto Avenida',
-        latitude: -22.3620,
-        longitude: -47.3900,
-        gasolina: 5.69,
-        etanol: 3.99
-      }
-    ];
-  </script>
-</body>
-</html>
-`;
+import createMapHTML from './map';
 
 function calculateDistance(
     lat1: number,
@@ -172,234 +72,359 @@ export default function MapInterface() {
 
     const [loading, setLoading] = useState(true);
 
-    function createMapHTML(latitude: number, longitude: number) {
-        // Converte os postos para JSON válido
-        const stationsJSON = JSON.stringify(stations).replace(/</g, '\\u003c');
+    // function createMapHTML(latitude: number, longitude: number) {
+    //     // Converte os postos para JSON válido
+    //     const stationsJSON = JSON.stringify(stations).replace(/</g, '\\u003c');
 
-        return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    //     return `
+    //     <!DOCTYPE html>
+    //     <html>
+    //     <head>
+    //         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-            <!-- CSS do Leaflet -->
-            <link
-                rel="stylesheet"
-                href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-            />
+    //         <!-- CSS do Leaflet -->
+    //         <link
+    //             rel="stylesheet"
+    //             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    //         />
 
-            <style>
-                html, body, #map {
-                    height: 100%;
-                    width: 100%;
-                    margin: 0;
-                    padding: 0;
-                }
-                .station-marker {
-                    width: 100%;
-                    height: 100%;
-                    background: #0066FF;
-                    border: 3px solid white;
-                    box-sizing: border-box;
-                    border-radius: 50% 50% 50% 0;
-                    transform: rotate(-45deg);
-                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
+    //         <style>
+    //             html, body, #map {
+    //                 height: 100%;
+    //                 width: 100%;
+    //                 margin: 0;
+    //                 padding: 0;
+    //             }
+    //             .station-marker {
+    //                 width: 100%;
+    //                 height: 100%;
+    //                 background: #0066FF;
+    //                 border: 3px solid white;
+    //                 box-sizing: border-box;
+    //                 border-radius: 50% 50% 50% 0;
+    //                 transform: rotate(-45deg);
+    //                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    //                 display: flex;
+    //                 align-items: center;
+    //                 justify-content: center;
+    //             }
 
-                .station-marker svg {
-                    width: 55%;
-                    height: 55%;
-                    transform: rotate(45deg);
-                }
-            </style>
-        </head>
+    //             .station-marker svg {
+    //                 width: 55%;
+    //                 height: 55%;
+    //                 transform: rotate(45deg);
+    //             }
 
-        <body>
-            <div id="map"></div>
+    //             /* Popup personalizado dos postos */
+    //             .station-popup {
+    //                 width: 230px;
+    //                 padding: 4px;
+    //                 font-family: Arial, sans-serif;
+    //                 color: #FFFFFF;
+    //             }
 
-            <!-- JavaScript do Leaflet -->
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    //             .station-popup-header {
+    //                 display: flex;
+    //                 align-items: center;
+    //                 gap: 10px;
+    //                 margin-bottom: 12px;
+    //             }
 
-            <script>
-                // Verifica se o Leaflet foi carregado
-                if (typeof L === 'undefined') {
-                    document.body.innerHTML = 'Erro ao carregar o Leaflet.';
-                } else {
+    //             .station-popup-icon {
+    //                 width: 36px;
+    //                 height: 36px;
+    //                 min-width: 36px;
+    //                 border-radius: 18px;
+    //                 background: #00E676;
+    //                 display: flex;
+    //                 align-items: center;
+    //                 justify-content: center;
+    //                 color: #003399;
+    //                 font-size: 19px;
+    //             }
 
-                    const customStationIcon = L.divIcon({
-                        className: '',
-                        html:
-                            '<div class="station-marker">' +
-                                '<svg viewBox="0 0 24 24" fill="none" ' +
-                                    'stroke="white" stroke-width="2" ' +
-                                    'stroke-linecap="round" stroke-linejoin="round">' +
-                                    '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
-                                    '<path d="M2 22h14"/>' +
-                                    '<path d="M7 7h4v5H7z"/>' +
-                                    '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
-                                '</svg>' +
-                            '</div>',
-                        iconSize: [48, 48],
-                        iconAnchor: [24, 48],
-                        popupAnchor: [0, -45]
-                    });
-                    const latitude = ${latitude};
-                    const longitude = ${longitude};
+    //             .station-popup-name {
+    //                 font-size: 16px;
+    //                 font-weight: bold;
+    //                 color: #FFFFFF;
+    //                 margin: 0;
+    //             }
 
-                    // Postos recebidos do React Native
-                    const stations = ${stationsJSON};
+    //             .station-popup-address {
+    //                 color: #B0C4DE;
+    //                 font-size: 12px;
+    //                 margin: 4px 0 12px;
+    //                 line-height: 17px;
+    //             }
 
-                    // Inicializa o mapa
-                    const map = L.map('map', {
-                        zoomControl: false
-                    }).setView([latitude, longitude], 16);
+    //             .station-popup-price {
+    //                 color: #FFFFFF;
+    //                 font-size: 13px;
+    //                 margin-bottom: 12px;
+    //             }
 
-                    map.on('zoomend', updateMarkerSize);
+    //             .station-popup-price strong {
+    //                 color: #00E676;
+    //             }
 
-                    // Camada do OpenStreetMap
-                    L.tileLayer(
-                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        {
-                            maxZoom: 19,
-                            attribution: '&copy; OpenStreetMap contributors'
-                        }
-                    ).addTo(map);
+    //             .station-popup-button {
+    //                 width: 100%;
+    //                 border: none;
+    //                 border-radius: 10px;
+    //                 padding: 11px;
+    //                 background: #00E676;
+    //                 color: #003399;
+    //                 font-size: 14px;
+    //                 font-weight: bold;
+    //                 cursor: pointer;
+    //             }
 
-                    // Marcador da localização do usuário
-                    L.circleMarker([latitude, longitude], {
-                        radius: 9,
-                        color: '#ffffff',
-                        weight: 3,
-                        fillColor: '#1769e0',
-                        fillOpacity: 1
-                    })
-                    .addTo(map)
-                    .bindPopup('Você está aqui');
+    //             .leaflet-popup-content-wrapper {
+    //                 background: #003399;
+    //                 border-radius: 16px;
+    //                 padding: 5px;
+    //             }
 
-                    // Adiciona os postos cadastrados
-                    stations.forEach(posto => {
+    //             .leaflet-popup-tip {
+    //                 background: #003399;
+    //             }
 
-                        if (
-                            typeof posto.latitude !== 'number' ||
-                            typeof posto.longitude !== 'number' ||
-                            !Number.isFinite(posto.latitude) ||
-                            !Number.isFinite(posto.longitude)
-                        ) {
-                            return;
-                        }
+    //             .leaflet-popup-content {
+    //                 margin: 12px;
+    //             }
+    //         </style>
+    //     </head>
 
-                        const marker = L.marker(
-                            [posto.latitude, posto.longitude],
-                            {
-                                icon: customStationIcon,
-                                isStation: true
-                            }
-                        ).addTo(map);
+    //     <body>
+    //         <div id="map"></div>
 
-                        // Monta o conteúdo do popup com segurança
-                        const popup = document.createElement('div');
+    //         <!-- JavaScript do Leaflet -->
+    //         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-                        const name = document.createElement('strong');
-                        name.textContent = posto.name || 'Posto sem nome';
+    //         <script>
+    //             // Verifica se o Leaflet foi carregado
+    //             if (typeof L === 'undefined') {
+    //                 document.body.innerHTML = 'Erro ao carregar o Leaflet.';
+    //             } else {
 
-                        const address = document.createElement('p');
-                        address.textContent = posto.address || '';
+    //                 const customStationIcon = L.divIcon({
+    //                     className: '',
+    //                     html:
+    //                         '<div class="station-marker">' +
+    //                             '<svg viewBox="0 0 24 24" fill="none" ' +
+    //                                 'stroke="white" stroke-width="2" ' +
+    //                                 'stroke-linecap="round" stroke-linejoin="round">' +
+    //                                 '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
+    //                                 '<path d="M2 22h14"/>' +
+    //                                 '<path d="M7 7h4v5H7z"/>' +
+    //                                 '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
+    //                             '</svg>' +
+    //                         '</div>',
+    //                     iconSize: [48, 48],
+    //                     iconAnchor: [24, 48],
+    //                     popupAnchor: [0, -45]
+    //                 });
+    //                 const latitude = ${latitude};
+    //                 const longitude = ${longitude};
 
-                        const gasoline = document.createElement('p');
-                        gasoline.textContent =
-                            'Gasolina: R$ ' + (posto.prices?.gasoline || '--');
+    //                 // Postos recebidos do React Native
+    //                 const stations = ${stationsJSON};
 
-                        popup.appendChild(name);
-                        popup.appendChild(address);
-                        popup.appendChild(gasoline);
+    //                 // Inicializa o mapa
+    //                 const map = L.map('map', {
+    //                     zoomControl: false
+    //                 }).setView([latitude, longitude], 16);
 
-                        marker.bindPopup(popup);
-                    });
+    //                 map.on('zoomend', updateMarkerSize);
 
-                    function updateMarkerSize() {
-                        const zoom = map.getZoom();
+    //                 // Camada do OpenStreetMap
+    //                 L.tileLayer(
+    //                     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    //                     {
+    //                         maxZoom: 19,
+    //                         attribution: '&copy; OpenStreetMap contributors'
+    //                     }
+    //                 ).addTo(map);
 
-                        // Zoom 15 = tamanho normal
-                        const scale = Math.max(
-                            0.4,
-                            Math.min(1.2, Math.pow(1.15, zoom - 15))
-                        );
+    //                 // Marcador da localização do usuário
+    //                 L.circleMarker([latitude, longitude], {
+    //                     radius: 9,
+    //                     color: '#ffffff',
+    //                     weight: 3,
+    //                     fillColor: '#1769e0',
+    //                     fillOpacity: 1
+    //                 })
+    //                 .addTo(map)
+    //                 .bindPopup('Você está aqui');
 
-                        const size = 32 * scale;
+    //                 // Adiciona os postos cadastrados
+    //                 stations.forEach(posto => {
 
-                        const newIcon = L.divIcon({
-                            className: '',
-                            html:
-                                '<div class="station-marker">' +
-                                    '<svg viewBox="0 0 24 24" fill="none" ' +
-                                        'stroke="white" stroke-width="2" ' +
-                                        'stroke-linecap="round" stroke-linejoin="round">' +
-                                        '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
-                                        '<path d="M2 22h14"/>' +
-                                        '<path d="M7 7h4v5H7z"/>' +
-                                        '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
-                                    '</svg>' +
-                                '</div>',
-                            iconSize: [size, size],
-                            iconAnchor: [size / 2, size],
-                            popupAnchor: [0, -size + 3]
-                        });
+    //                     if (
+    //                         typeof posto.latitude !== 'number' ||
+    //                         typeof posto.longitude !== 'number' ||
+    //                         !Number.isFinite(posto.latitude) ||
+    //                         !Number.isFinite(posto.longitude)
+    //                     ) {
+    //                         return;
+    //                     }
 
-                        map.eachLayer((layer) => {
-                            if (layer instanceof L.Marker && layer.options.isStation) {
-                                layer.setIcon(newIcon);
-                            }
-                        });
-                    }
+    //                     const marker = L.marker(
+    //                         [posto.latitude, posto.longitude],
+    //                         {
+    //                             icon: customStationIcon,
+    //                             isStation: true
+    //                         }
+    //                     ).addTo(map);
 
-                    // Disponibiliza a função para atualizações de localização
-                    window.updateUserLocation = function(latitude, longitude) {
-                        const position = [latitude, longitude];
+    //                    // Monta o popup personalizado
+    //                     const popup = document.createElement('div');
+    //                     popup.className = 'station-popup';
 
-                        if (window.userMarker) {
-                            map.removeLayer(window.userMarker);
-                        }
+    //                     // Cabeçalho
+    //                     const header = document.createElement('div');
+    //                     header.className = 'station-popup-header';
 
-                        if (window.userCircle) {
-                            map.removeLayer(window.userCircle);
-                        }
+    //                     const icon = document.createElement('div');
+    //                     icon.className = 'station-popup-icon';
+    //                     icon.textContent = '⛽';
 
-                        window.userCircle = L.circle(position, {
-                            radius: 30,
-                            color: '#1769e0',
-                            fillColor: '#1769e0',
-                            fillOpacity: 0.12,
-                            weight: 1
-                        }).addTo(map);
+    //                     const name = document.createElement('h3');
+    //                     name.className = 'station-popup-name';
+    //                     name.textContent = posto.name || 'Posto sem nome';
 
-                        window.userMarker = L.circleMarker(position, {
-                            radius: 9,
-                            color: '#ffffff',
-                            weight: 3,
-                            fillColor: '#1769e0',
-                            fillOpacity: 1
-                        }).addTo(map);
+    //                     header.appendChild(icon);
+    //                     header.appendChild(name);
 
-                        window.userMarker.bindPopup('Você está aqui');
+    //                     // Endereço
+    //                     const address = document.createElement('p');
+    //                     address.className = 'station-popup-address';
+    //                     address.textContent = posto.address || 'Endereço não informado';
 
-                        map.setView(position, 16);
-                    };
+    //                     // Preços
+    //                     const prices = document.createElement('div');
+    //                     prices.className = 'station-popup-price';
 
-                    updateMarkerSize();
-                    window.mapReady = true;
-                    
+    //                     const gasoline = document.createElement('div');
+    //                     gasoline.innerHTML = 'Gasolina: <strong>R$ ' +
+    //                         (posto.prices?.gasoline || '--') + '</strong>';
 
-                    console.log('Mapa carregado!');
-                    console.log('Postos recebidos:', stations.length);
-                }
-            </script>
-        </body>
-        </html>
-    `;
-    }
+    //                     const ethanol = document.createElement('div');
+    //                     ethanol.innerHTML = 'Etanol: <strong>R$ ' +
+    //                         (posto.prices?.ethanol || '--') + '</strong>';
+
+    //                     const diesel = document.createElement('div');
+    //                     diesel.innerHTML = 'Diesel: <strong>R$ ' +
+    //                         (posto.prices?.diesel || '--') + '</strong>';
+
+    //                     prices.appendChild(gasoline);
+    //                     prices.appendChild(ethanol);
+    //                     prices.appendChild(diesel);
+
+    //                     // Botão
+    //                     const goToStation = document.createElement('button');
+    //                     goToStation.className = 'station-popup-button';
+    //                     goToStation.textContent = 'Ir para o posto';
+
+    //                     goToStation.addEventListener('click', function() {
+    //                         map.setView(
+    //                             [posto.latitude, posto.longitude],
+    //                             18
+    //                         );
+
+    //                         marker.closePopup();
+    //                     });
+
+    //                     // Monta o popup
+    //                     popup.appendChild(header);
+    //                     popup.appendChild(address);
+    //                     popup.appendChild(prices);
+    //                     popup.appendChild(goToStation);
+
+    //                     marker.bindPopup(popup);
+    //                 });
+
+    //                 function updateMarkerSize() {
+    //                     const zoom = map.getZoom();
+
+    //                     // Zoom 15 = tamanho normal
+    //                     const scale = Math.max(
+    //                         0.4,
+    //                         Math.min(1.2, Math.pow(1.15, zoom - 15))
+    //                     );
+
+    //                     const size = 32 * scale;
+
+    //                     const newIcon = L.divIcon({
+    //                         className: '',
+    //                         html:
+    //                             '<div class="station-marker">' +
+    //                                 '<svg viewBox="0 0 24 24" fill="none" ' +
+    //                                     'stroke="white" stroke-width="2" ' +
+    //                                     'stroke-linecap="round" stroke-linejoin="round">' +
+    //                                     '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/>' +
+    //                                     '<path d="M2 22h14"/>' +
+    //                                     '<path d="M7 7h4v5H7z"/>' +
+    //                                     '<path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/>' +
+    //                                 '</svg>' +
+    //                             '</div>',
+    //                         iconSize: [size, size],
+    //                         iconAnchor: [size / 2, size],
+    //                         popupAnchor: [0, -size + 3]
+    //                     });
+
+    //                     map.eachLayer((layer) => {
+    //                         if (layer instanceof L.Marker && layer.options.isStation) {
+    //                             layer.setIcon(newIcon);
+    //                         }
+    //                     });
+    //                 }
+
+    //                 // Disponibiliza a função para atualizações de localização
+    //                 window.updateUserLocation = function(latitude, longitude) {
+    //                     const position = [latitude, longitude];
+
+    //                     if (window.userMarker) {
+    //                         map.removeLayer(window.userMarker);
+    //                     }
+
+    //                     if (window.userCircle) {
+    //                         map.removeLayer(window.userCircle);
+    //                     }
+
+    //                     window.userCircle = L.circle(position, {
+    //                         radius: 30,
+    //                         color: '#1769e0',
+    //                         fillColor: '#1769e0',
+    //                         fillOpacity: 0.12,
+    //                         weight: 1
+    //                     }).addTo(map);
+
+    //                     window.userMarker = L.circleMarker(position, {
+    //                         radius: 9,
+    //                         color: '#ffffff',
+    //                         weight: 3,
+    //                         fillColor: '#1769e0',
+    //                         fillOpacity: 1
+    //                     }).addTo(map);
+
+    //                     window.userMarker.bindPopup('Você está aqui');
+
+    //                     map.setView(position, 16);
+    //                 };
+
+    //                 updateMarkerSize();
+    //                 window.mapReady = true;
+
+
+    //                 console.log('Mapa carregado!');
+    //                 console.log('Postos recebidos:', stations.length);
+    //             }
+    //         </script>
+    //     </body>
+    //     </html>
+    // `;
+    // }
 
 
     useFocusEffect(
@@ -491,49 +516,6 @@ export default function MapInterface() {
         };
     }, []);
 
-    // useEffect(() => {
-    //     let subscription: Location.LocationSubscription | null = null;
-    //     let active = true;
-
-    //     async function startTracking() {
-    //         try {
-    //             const { status } =
-    //                 await Location.requestForegroundPermissionsAsync();
-
-    //             if (status !== 'granted' || !active) {
-    //                 return;
-    //             }
-
-    //             subscription = await Location.watchPositionAsync(
-    //                 {
-    //                     accuracy: Location.Accuracy.High,
-    //                     distanceInterval: 5,
-    //                     timeInterval: 2000,
-    //                 },
-    //                 (position) => {
-    //                     if (!active) return;
-
-    //                     const { latitude, longitude } = position.coords;
-
-    //                     webViewRef.current?.injectJavaScript(`
-    //         updateUserLocation(${latitude}, ${longitude});
-    //         true;
-    //       `);
-    //                 }
-    //             );
-    //         } catch (error) {
-    //             console.error('Erro ao acompanhar localização:', error);
-    //         }
-    //     }
-
-    //     startTracking();
-
-    //     return () => {
-    //         active = false;
-    //         subscription?.remove();
-    //     };
-    // }, []);
-
     const insets = useSafeAreaInsets();
 
     function handleFindOnMap(station: Station) {
@@ -624,84 +606,46 @@ export default function MapInterface() {
     }
 
     async function handleLocation() {
-        try {
-            const { status } =
-                await Location.requestForegroundPermissionsAsync();
+    try {
+        const { status } =
+            await Location.requestForegroundPermissionsAsync();
 
-            if (status !== 'granted') {
-                Alert.alert(
-                    'Permissão necessária',
-                    'Permita o acesso à localização para encontrar sua posição no mapa.'
-                );
-                return;
-            }
+        if (status !== 'granted') {
+            Alert.alert(
+                'Permissão necessária',
+                'Permita o acesso à localização para encontrar sua posição no mapa.'
+            );
+            return;
+        }
 
-            const location = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
+        const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+        });
 
-            const { latitude, longitude } = location.coords;
+        const { latitude, longitude } = location.coords;
 
-            const script = `
-            updateUserLocation(${latitude}, ${longitude});
+        const script = `
+            (function() {
+                if (window.mapReady && typeof window.updateUserLocation === 'function') {
+                    window.updateUserLocation(${latitude}, ${longitude});
+                } else {
+                    console.log('Mapa ainda não está pronto.');
+                }
+            })();
             true;
         `;
 
-            webViewRef.current?.injectJavaScript(script);
+        webViewRef.current?.injectJavaScript(script);
 
-        } catch (error) {
-            console.error('Erro ao obter localização:', error);
+    } catch (error) {
+        console.error('Erro ao obter localização:', error);
 
-            Alert.alert(
-                'Erro',
-                'Não foi possível obter sua localização. Verifique se o GPS está ativado.'
-            );
-        }
+        Alert.alert(
+            'Erro',
+            'Não foi possível obter sua localização. Verifique se o GPS está ativado.'
+        );
     }
-
-    // useEffect(() => {
-    //     if (!mapReady || locationLoaded) return;
-
-    //     let cancelled = false;
-
-    //     async function loadUserLocation() {
-    //         try {
-    //             const { status } =
-    //                 await Location.requestForegroundPermissionsAsync();
-
-    //             if (status !== 'granted') {
-    //                 Alert.alert(
-    //                     'Localização',
-    //                     'Permita o acesso à localização para mostrar sua posição no mapa.'
-    //                 );
-    //                 return;
-    //             }
-
-    //             const location = await Location.getCurrentPositionAsync({
-    //                 accuracy: Location.Accuracy.High,
-    //             });
-
-    //             if (cancelled) return;
-
-    //             const { latitude, longitude } = location.coords;
-
-    //             webViewRef.current?.injectJavaScript(`
-    //             updateUserLocation(${latitude}, ${longitude});
-    //             true;
-    //         `);
-
-    //             setLocationLoaded(true);
-    //         } catch (error) {
-    //             console.error('Erro ao obter localização:', error);
-    //         }
-    //     }
-
-    //     loadUserLocation();
-
-    //     return () => {
-    //         cancelled = true;
-    //     };
-    // }, [mapReady, locationLoaded]);
+}
 
 
     return (
@@ -713,7 +657,8 @@ export default function MapInterface() {
                     source={{
                         html: createMapHTML(
                             location.latitude,
-                            location.longitude
+                            location.longitude,
+                            stations
                         ),
                     }}
                     style={{ flex: 1 }}
