@@ -606,46 +606,46 @@ export default function MapInterface() {
     }
 
     async function handleLocation() {
-    try {
-        const { status } =
-            await Location.requestForegroundPermissionsAsync();
+        try {
+            const { status } =
+                await Location.requestForegroundPermissionsAsync();
 
-        if (status !== 'granted') {
+            if (status !== 'granted') {
+                Alert.alert(
+                    'Permissão necessária',
+                    'Permita o acesso à localização para encontrar sua posição no mapa.'
+                );
+                return;
+            }
+
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+
+            const { latitude, longitude } = location.coords;
+
+            const script = `
+                (function() {
+                    if (window.mapReady && typeof window.updateUserLocation === 'function') {
+                        window.updateUserLocation(${latitude}, ${longitude});
+                    } else {
+                        console.log('Mapa ainda não está pronto.');
+                    }
+                })();
+                true;
+            `;
+
+            webViewRef.current?.injectJavaScript(script);
+
+        } catch (error) {
+            console.error('Erro ao obter localização:', error);
+
             Alert.alert(
-                'Permissão necessária',
-                'Permita o acesso à localização para encontrar sua posição no mapa.'
+                'Erro',
+                'Não foi possível obter sua localização. Verifique se o GPS está ativado.'
             );
-            return;
         }
-
-        const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-        });
-
-        const { latitude, longitude } = location.coords;
-
-        const script = `
-            (function() {
-                if (window.mapReady && typeof window.updateUserLocation === 'function') {
-                    window.updateUserLocation(${latitude}, ${longitude});
-                } else {
-                    console.log('Mapa ainda não está pronto.');
-                }
-            })();
-            true;
-        `;
-
-        webViewRef.current?.injectJavaScript(script);
-
-    } catch (error) {
-        console.error('Erro ao obter localização:', error);
-
-        Alert.alert(
-            'Erro',
-            'Não foi possível obter sua localização. Verifique se o GPS está ativado.'
-        );
     }
-}
 
 
     return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     StyleSheet,
     View,
@@ -12,11 +12,69 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { getSettings, updateSettings, UserSettings, } from '@/services/settings_storage';
+import SettingsOptionModal from '../components/settingsOptionModal';
+
 
 export default function SettingsScreen() {
     const [notifications, setNotifications] = useState(true);
     const [locationAlerts, setLocationAlerts] = useState(true);
+    const [user, setUser] = useState("Usuário")
     const router = useRouter();
+
+    const [settings, setSettings] = useState<UserSettings | null>(null);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [modalTitle, setModalTitle] = useState('');
+    const [modalOptions, setModalOptions] = useState<
+        { label: string; value: string | number }[]
+    >([]);
+    const [modalField, setModalField] = useState<
+        'favoriteFuel' | 'searchRadius'
+    >('favoriteFuel');
+
+    async function fetchSettings() {
+        const settings = await getSettings();
+        //console.log(settings)
+        setUser(settings["userName"])
+    }
+
+    useEffect(() => {
+        fetchSettings();
+
+        async function loadSettings() {
+            const savedSettings = await getSettings();
+            setSettings(savedSettings);
+        }
+
+        loadSettings();
+    })
+
+    function openOptionModal(
+        title: string,
+        field: 'favoriteFuel' | 'searchRadius',
+        options: { label: string; value: string | number }[]
+    ) {
+        setModalTitle(title);
+        setModalField(field);
+        setModalOptions(options);
+        setModalVisible(true);
+    }
+
+    async function handleSaveOption(value: string | number) {
+        if (!settings) return;
+
+        try {
+            const updatedSettings = await updateSettings({
+                [modalField]: value,
+            });
+
+            setSettings(updatedSettings);
+            setModalVisible(false);
+
+        } catch (error) {
+            console.error('Erro ao salvar configuração:', error);
+        }
+    }
 
     return (
         <LinearGradient colors={['#0066FF', '#003399', '#001A4D']} style={styles.container}>
@@ -52,33 +110,55 @@ export default function SettingsScreen() {
                             <Ionicons name="person" size={28} color="#0055FF" />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.profileName}>Usuário</Text>
-                            <Text style={styles.profileEmail}>usuario@email.com</Text>
+                            <Text style={styles.profileName}>{user}</Text>
+                            {/* <Text style={styles.profileEmail}>usuario@email.com</Text> */}
                         </View>
-                        <TouchableOpacity>
+                        {/* <TouchableOpacity>
                             <Ionicons name="pencil" size={20} color="#00E676" />
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
                     </View>
 
                     {/* Seção Preferências */}
                     <Text style={styles.sectionHeader}>Preferências</Text>
                     <View style={styles.group}>
-                        <TouchableOpacity style={styles.row}>
+                        <TouchableOpacity style={styles.row} onPress={() =>
+                            openOptionModal(
+                                'Combustível favorito',
+                                'favoriteFuel',
+                                [
+                                    { label: 'Gasolina Comum', value: 'Gasolina Comum' },
+                                    { label: 'Gasolina Aditivada', value: 'Gasolina Aditivada' },
+                                    { label: 'Etanol', value: 'Etanol' },
+                                    { label: 'Diesel', value: 'Diesel' },
+                                ]
+                            )
+                        }>
                             <View style={styles.rowLeft}>
                                 <Ionicons name="color-palette-outline" size={20} color="#00E676" />
                                 <Text style={styles.rowLabel}>Combustível Favorito</Text>
                             </View>
-                            <Text style={styles.rowValue}>Gasolina Comum ›</Text>
+                            <Text style={styles.rowValue}>{settings != null ? settings["favoriteFuel"] : ""}</Text>
                         </TouchableOpacity>
 
                         <View style={styles.divider} />
 
-                        <TouchableOpacity style={styles.row}>
+                        <TouchableOpacity style={styles.row} onPress={() =>
+                            openOptionModal(
+                                'Combustível favorito',
+                                'searchRadius',
+                                [
+                                    { label: '5 Km', value: 5 },
+                                    { label: '10 Km', value: 10 },
+                                    { label: '25 Km', value: 25 },
+                                    { label: '50 Km', value: 50 },
+                                ]
+                            )
+                        }>
                             <View style={styles.rowLeft}>
                                 <Ionicons name="location-outline" size={20} color="#00E676" />
                                 <Text style={styles.rowLabel}>Raio de Busca</Text>
                             </View>
-                            <Text style={styles.rowValue}>10 km ›</Text>
+                            <Text style={styles.rowValue}>{settings != null ? settings["searchRadius"] : ""} Km</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -125,6 +205,18 @@ export default function SettingsScreen() {
                             <Text style={styles.rowValue}>v1.0.0</Text>
                         </TouchableOpacity>
                     </View>
+                    <SettingsOptionModal
+                        visible={modalVisible}
+                        title={modalTitle}
+                        options={modalOptions}
+                        selectedValue={
+                            settings
+                                ? settings[modalField]
+                                : ''
+                        }
+                        onClose={() => setModalVisible(false)}
+                        onSave={handleSaveOption}
+                    />
                 </ScrollView>
             </SafeAreaView>
         </LinearGradient>
