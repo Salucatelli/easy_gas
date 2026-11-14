@@ -166,6 +166,8 @@ export default function createMapHTML(latitude: number, longitude: number, stati
                         zoomControl: false
                     }).setView([latitude, longitude], 16);
 
+                    window.map = map;
+
                     map.on('zoomend', updateMarkerSize);
 
                     // Camada do OpenStreetMap
@@ -258,13 +260,16 @@ export default function createMapHTML(latitude: number, longitude: number, stati
                         goToStation.textContent = 'Ir para o posto';
 
                         goToStation.addEventListener('click', function() {
-                            map.setView(
-                                [posto.latitude, posto.longitude],
-                                18
-                            );
+                        const latitude = posto.latitude;
+                        const longitude = posto.longitude;
 
-                            marker.closePopup();
-                        });
+                        const googleMapsUrl =
+                            "https://www.google.com/maps/dir/?api=1&destination="+latitude+","+longitude;
+
+                        window.open(googleMapsUrl, '_system');
+
+                        marker.closePopup();
+                    });
 
                         // Monta o popup
                         popup.appendChild(header);
